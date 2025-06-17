@@ -548,6 +548,7 @@ def get_date_mask(df, start_date, end_date):
     ) & (df.index <= datetime.strptime(end_date, "%Y-%m-%d").replace(tzinfo=UTC))
     return date_mask
 
+
 def get_mean_by_doy(dataframe) -> pd.DataFrame:
     return (
         dataframe.groupby([dataframe.index.day_of_year])
@@ -556,7 +557,7 @@ def get_mean_by_doy(dataframe) -> pd.DataFrame:
     )
 
 
-def add_curve_to_figures(figures:list, data:dict, key: str, label: str = "") -> list:
+def add_curve_to_figures(figures: list, data: dict, key: str, label: str = "") -> list:
     if not label:
         label = get_label_from_key(key)
     curve = hv.Curve(data[key], label=label).opts(line_width=0.8)
@@ -698,6 +699,7 @@ def plot_mass_balance_lps(
         .opts(sizing_mode="stretch_width", shared_axes=False)
     )
     return layout
+
 
 def plot_cumulative_smb_lps(
     smb: dict,
