@@ -3,10 +3,10 @@
 from datetime import datetime
 
 import numpy as np
-from dateutil.tz import UTC
-from oggm import cfg, utils, workflow, GlacierDirectory
-from oggm.core import massbalance
 import pandas as pd
+from dateutil.tz import UTC
+from oggm import GlacierDirectory, cfg, utils, workflow
+from oggm.core import massbalance
 
 
 def get_ref_mb_candidates(rgi_region: str = "06") -> list:
@@ -50,7 +50,7 @@ def init_oggm(
     store_model_geometry: bool = True,
 ):
     """Initialise OGGM."""
-    cfg.initialize(logging_level="WARNING")
+    cfg.initialize(logging_level="CRITICAL")
     cfg.PATHS["working_dir"] = utils.gettempdir(dirname=tempdir, reset=reset)
     cfg.PARAMS["border"] = 80
     cfg.PARAMS["use_multiprocessing"] = True
@@ -85,8 +85,8 @@ def get_gdirs(rgi_ids: list = None, base_url: str = "", prepro_border: int = Non
         prepro_rgi_version="62",
         prepro_base_url=base_url,
     )
-    for glacier in gdirs:
-        print(glacier.name)
+    # for glacier in gdirs:
+    #     print(glacier.name)
     return gdirs
 
 

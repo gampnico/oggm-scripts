@@ -14,7 +14,10 @@ dependencies:
   - holoviews
   - matplotlib
   - seaborn
+  - jupyter
   - ipywidgets
+  - jupyter_bokeh
+  - ipywidgets_bokeh
   # tests
   - pytest
   - coverage
@@ -50,8 +53,6 @@ dependencies:
   # build
   - hatchling>=1.26
   - twine
-  # misc
-  - jupyter
   # Pip packages
   - pip
   - pip:
