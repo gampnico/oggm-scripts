@@ -1,0 +1,61 @@
+name: dtcg_oggm_lps
+channels:
+  - conda-forge
+dependencies:
+  # base requirements
+  - python=3.12
+  - numpy
+  - pandas
+  - xarray
+  - shapely
+  - geopandas
+  - bokeh
+  - geoviews
+  - holoviews
+  - matplotlib
+  - seaborn
+  - ipywidgets
+  # tests
+  - pytest
+  - coverage
+  - coveralls
+  # OGGM requirements
+  - scipy
+  - Pillow
+  - netcdf4
+  - scikit-image
+  - scikit-learn
+  - configobj
+  - xarray
+  - dask
+  - bottleneck
+  - pyproj
+  - cartopy
+  - rasterio
+  - rioxarray
+  - pytables
+  - salem
+  - motionless
+  - ipython
+  - joblib
+  - progressbar2
+  # docs
+  - sphinx
+  - pydata-sphinx-theme
+  - sphinx-book-theme>=0.3.2
+  - sphinx-togglebutton
+  - numpydoc
+  - sphinx-intl
+  - sphinx-reredirects
+  # build
+  - hatchling>=1.26
+  - twine
+  # misc
+  - jupyter
+  # Pip packages
+  - pip
+  - pip:
+    - specklia
+    - build>0.7
+    - git+https://github.com/gampnico/oggm@feat-lps
+    - git+https://github.com/OGGM/pytest-mpl
