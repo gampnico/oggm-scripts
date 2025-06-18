@@ -52,10 +52,10 @@ def init_oggm(
     """Initialise OGGM."""
     cfg.initialize(logging_level="CRITICAL")
     cfg.PATHS["working_dir"] = utils.gettempdir(dirname=tempdir, reset=reset)
-    cfg.PARAMS["border"] = 80
-    cfg.PARAMS["use_multiprocessing"] = True
-    cfg.PARAMS["store_model_geometry"] = True
-    # cfg.PARAMS["evolution_model"] = "FluxBased"
+    cfg.PARAMS["border"] = border
+    cfg.PARAMS["use_multiprocessing"] = use_multiprocessing
+    cfg.PARAMS["store_model_geometry"] = store_model_geometry
+    cfg.PARAMS["evolution_model"] = "FluxBased"
 
 
 def get_gdirs(rgi_ids: list = None, base_url: str = "", prepro_border: int = None):
@@ -70,17 +70,18 @@ def get_gdirs(rgi_ids: list = None, base_url: str = "", prepro_border: int = Non
         #     "L3-L5_files/2023.3/elev_bands/W5E5"
         # )
 
-        base_url = (
-            "https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/"
-            "L3-L5_files/2025.1/elev_bands/W5E5_utm"
-        )
+        # base_url = (
+        #     "https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/"
+        #     "L3-L5_files/2025.1/elev_bands/W5E5_utm"
+        # )
+        base_url = "https://cluster.klima.uni-bremen.de/~oggm/gdirs/oggm_v1.6/exps/dtcg/halslon_v1/"
 
     if not prepro_border:
         prepro_border = cfg.PARAMS["border"]
 
     gdirs = workflow.init_glacier_directories(
         rgi_ids,
-        from_prepro_level=4,
+        from_prepro_level=1,
         prepro_border=prepro_border,
         prepro_rgi_version="62",
         prepro_base_url=base_url,
@@ -108,7 +109,6 @@ def get_gdir_for_calibration(gdirs, key: str, value) -> GlacierDirectory:
         print(f"{e}")
         print("Selecting first available glacier directory.")
         gdir = gdirs[0]
-    print(f"Path to the DEM: {gdir.get_filepath('glacier_mask')}")
     return gdir
 
 
@@ -173,7 +173,7 @@ def get_calibrated_models(
     daily=False,
     calibration_filesuffix="",
     extra_model_kwargs=None,
-):
+) -> tuple:
     """Get calibrated models.
 
     Note this uses all three calibration parameters, with ``prcp_fac``
@@ -236,13 +236,25 @@ def get_calibrated_models(
     prcp_fac_min = utils.clip_scalar(prcp_fac * 0.8, mi, ma)
     prcp_fac_max = utils.clip_scalar(prcp_fac * 1.2, mi, ma)
 
+    if "DailySfc_Cryosat_2015" in calibration_filesuffix:
+        calib_params = {
+            "calibrate_param1": "prcp_fac",
+            "calibrate_param2": "temp_bias",
+            "calibrate_param3": "melt_f",
+            "melt_f": 4.728225163624522,
+        }
+    else:
+        calib_params = {
+            "calibrate_param1": "melt_f",
+            "calibrate_param2": "prcp_fac",
+            "calibrate_param3": "temp_bias",
+        }
+
     massbalance.mb_calibration_from_scalar_mb(
         gdir,
         ref_mb=ref_mb,
         ref_period=geodetic_period,
-        calibrate_param1="prcp_fac",
-        calibrate_param2="melt_f",
-        calibrate_param3="temp_bias",
+        **calib_params,
         prcp_fac=prcp_fac,
         prcp_fac_min=prcp_fac_min,
         prcp_fac_max=prcp_fac_max,
@@ -285,74 +297,84 @@ def get_nearest(items, pivot):
     return min(items, key=lambda x: abs(x - pivot))
 
 
-def get_dhdt_data(ds, calendar: bool = False, year_start=2010, year_end=2020):
+def get_dmdtda(ds, dates: list, year_start: datetime, year_end: datetime) -> float:
     """
     Parameters
     ----------
     ds : xr.DataArray
         OGGM dataset with EOLIS datacube.
-    calendar : bool, default False
-        Reference period is bound to calendar years. This will find the
-        nearest available date to the selected first and last years.
-    year_start : int
+    dates : list
+        Datetimes for each timestep in the data period.
+    year_start : datetime
         Start of reference period.
-    year_end : int
+    year_end : datetime
         End of reference period.
     """
-    dates = get_eolis_dates(ds)
     elevation = np.array(
         [
             np.nanmean(elevation_change_map.where(ds.glacier_mask == 1))
             for elevation_change_map in ds.eolis_gridded_elevation_change
         ]
     )
-
-    if calendar:
-        year_start = datetime(year_start - 1, 12, 31, tzinfo=UTC)
-        year_end = datetime(year_end, 1, 1, tzinfo=UTC)
-
-        # EOLIS data is in 30-day periods, so adjust to nearest available date
-        year_start = get_nearest(dates, year_start)
-        year_end = get_nearest(dates, year_end)
-
-        mask = (year_start <= dates) & (dates <= year_end)
-        dates = dates[mask]
-        elevation = elevation[mask]
-
     calib_frame = pd.DataFrame({"dh": elevation}, index=dates)
-    # calib_frame["dh"] = calib_frame["elevation"] - calib_frame["elevation"].iloc[0]
-    calib_frame["dt"] = calib_frame.index.diff()
-    calib_frame["dt"] = calib_frame["dt"].astype("timedelta64[s]")
-    calib_frame.loc[calib_frame.index[0], "dt"] = calib_frame["dt"].iloc[1]
 
-    calib_frame["dhdt"] = calib_frame["dh"] / calib_frame["dt"].values.astype("float")
-    return calib_frame
+    dt = (year_end - year_start).total_seconds() / cfg.SEC_IN_YEAR
 
+    # dmdtda in kg m-2 yr-1, area not needed as we already have a mean dh
+    # (dh = dV / A)
+    bulk_density = 850  # not cfg.PARAMS["ice_density"]?
+    dh = calib_frame["dh"].loc[year_end] - calib_frame["dh"].loc[year_start]
+    # Convert to meters water-equivalent per year to have the same unit
+    # as Hugonnet
+    dmdtda = (dh * bulk_density / dt) / 1000
 
-def get_dmdtda(gdir, calib_data):
-    dhdt = calib_data["dh"].mean()
-
-    da = gdir.rgi_area_km2
-    dmdtda = dhdt * cfg.PARAMS["ice_density"] * da / 1e6
     return dmdtda
 
 
+def get_temporal_bounds(dates: list, year_start: int, year_end: int) -> tuple:
+    """Get start and end dates of geodetic and observational periods.
+
+    Returns
+    -------
+    tuple[datetime]
+        Start and end dates of geodetic reference period, and the
+        nearest available start and end dates for observations.
+    """
+    year_start = datetime(year_start, 1, 1, tzinfo=UTC)
+    year_end = datetime(year_end, 1, 1, tzinfo=UTC)
+
+    # EOLIS data is in 30-day periods, so get closest available date
+    data_start = get_nearest(dates, year_start)
+    data_end = get_nearest(dates, year_end)
+
+    return year_start, year_end, data_start, data_end
+
+
 def get_geodetic_mb_from_dataset(
-    gdir, ds, calendar: bool = False, year_start=2011, year_end=2020
+    gdir, ds, year_start: int = 2011, year_end: int = 2020
 ) -> pd.DataFrame:
-    calib_data = get_dhdt_data(
-        ds, calendar=calendar, year_start=year_start, year_end=year_end
+    """Get the geodetic mass balance from enhanced gridded data."""
+
+    dates = get_eolis_dates(ds)
+    year_start, year_end, data_start, data_end = get_temporal_bounds(
+        dates=dates, year_start=year_start, year_end=year_end
     )
-    dmdtda = get_dmdtda(gdir, calib_data)
-    dates = calib_data.index
+
+    dmdtda = get_dmdtda(ds=ds, dates=dates, year_start=data_start, year_end=data_end)
+
     geodetic_mb_period = (
-        f"{dates[0].strftime('%Y-%m-%d')}_{dates[-1].strftime('%Y-%m-%d')}"
+        f"{year_start.strftime('%Y-%m-%d')}_{year_end.strftime('%Y-%m-%d')}"
+    )
+    observations_period = (
+        f"{data_start.strftime('%Y-%m-%d')}_{data_end.strftime('%Y-%m-%d')}"
     )
     geodetic_mb = {
         "rgiid": [gdir.rgi_id],
         "period": geodetic_mb_period,
+        "observations_period": observations_period,
         "area": gdir.rgi_area_m2,
         "dmdtda": dmdtda,
+        "source": "CryoTEMPO-EOLIS",
         "err_dmdtda": 0.0,
         "reg": 6,
         "is_cor": False,
@@ -361,13 +383,15 @@ def get_geodetic_mb_from_dataset(
     return pd.DataFrame.from_records(geodetic_mb, index="rgiid")
 
 
-def get_geodetic_mb_for_calibration(gdir, ds):
+def get_geodetic_mb_for_calibration(gdir, ds) -> pd.DataFrame:
     pd_geodetic = utils.get_geodetic_mb_dataframe()
-    for x in [True, False]:
-        geodetic_mb = get_geodetic_mb_from_dataset(gdir, ds, calendar=x)
+    pd_geodetic["source"] = "Hugonnet"
+
+    period = [(2011, 2020), (2015, 2016)]
+    for years in period:
+        geodetic_mb = get_geodetic_mb_from_dataset(
+            gdir, ds, year_start=years[0], year_end=years[1]
+        )
         pd_geodetic = pd.concat([pd_geodetic, geodetic_mb])
-    geodetic_mb = get_geodetic_mb_from_dataset(
-        gdir, ds, calendar=True, year_start=2015, year_end=2016
-    )
-    pd_geodetic = pd.concat([pd_geodetic, geodetic_mb])
-    return pd_geodetic
+
+    return pd_geodetic.loc[gdir.rgi_id]

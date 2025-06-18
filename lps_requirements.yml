@@ -18,6 +18,7 @@ dependencies:
   - ipywidgets
   - jupyter_bokeh
   - ipywidgets_bokeh
+  - contextily
   # tests
   - pytest
   - coverage
