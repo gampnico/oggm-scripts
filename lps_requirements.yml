@@ -19,6 +19,9 @@ dependencies:
   - jupyter_bokeh
   - ipywidgets_bokeh
   - contextily
+  # dashboard servables
+  - firefox
+  - geckodriver
   # tests
   - pytest
   - coverage

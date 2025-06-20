@@ -803,6 +803,53 @@ def plot_cumulative_smb_lps(
     return layout
 
 
+def plot_test_data(smb, ref_year=2017):
+    figures = []
+    if not smb:
+        smb = [np.arange(0, 20)]
+    # plot_years = [datetime(i,1,1,tzinfo=UTC) for i in range(2000,2020)]
+    plot_dates = pd.date_range(f"2000-01-01", f"2019-12-31", freq="1MS", tz=UTC)
+
+    df = pd.DataFrame(smb, columns=["smb"], index=plot_dates)
+    curve = hv.Curve(df["smb"], label="2000-2020").opts(
+        line_width=1.0, color="grey", line_dash="dotted"
+    )
+    figures.append(curve)
+
+    sine_diff = ref_year - 2000
+    curve = hv.Curve(df["smb"] * sine_diff, label=f"{ref_year}").opts(
+        line_width=1.0, color="red"
+    )
+    figures.append(curve)
+
+    default_opts = get_default_hv_opts()
+    overlay = (
+        hv.Overlay(figures)
+        .opts(**default_opts)
+        .opts(
+            aspect=4,
+            ylabel="Daily SMB (mm w.e.)",
+            title=f"Daily Specific Mass Balance\nTest Glacier, {2000}-{2020}",
+            xlabel="Month",
+            # xformatter=f"%j",
+            xformatter=bokeh.models.DatetimeTickFormatter(months="%B"),
+            tools=["xwheel_zoom", "xpan"],
+            active_tools=["xwheel_zoom"],
+            legend_position="top",
+            legend_opts={
+                "orientation": "vertical",
+                "css_variables": {"font-size": "1em", "display": "inline"},
+            },
+        )
+    )
+    layout = (
+        hv.Layout([overlay])
+        .cols(1)
+        .opts(sizing_mode="stretch_width", shared_axes=False)
+    )
+    return layout
+
+
 def plot_mb_comparison_lps(
     smb: dict,
     years=None,

@@ -154,6 +154,11 @@ def plot_data(smb: dict, gdir, datacube, ref_year: int = 2017, resample: bool = 
     return layout
 
 
+def plot_test_data(smb, ref_year=2017):
+    layout = plotting.plot_test_data(smb=smb, ref_year=ref_year)
+    return layout
+
+
 def main():
     pass
 
