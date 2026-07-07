@@ -54,7 +54,7 @@ docs = [
     "sphinx-rtd-theme >= 1.1",
 ]
 dev = [
-    "dtcg[tests,docs]",
+    # "dtcg[tests,docs]",
     "hatchling >= 1.12",
     "build >= 0.7",
     "pylint >= 2.16.1",
@@ -88,3 +88,8 @@ exclude = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["oggm_scripts"]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.31.0",
+]
